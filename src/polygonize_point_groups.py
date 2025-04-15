@@ -1,4 +1,4 @@
-# Given a directory containing LAS files that have just the requested 
+# Given a directory containing LAS files that have just the requested
 # classification, create polygons of the convex hull of each point
 # grouping.
 #
@@ -33,20 +33,20 @@ import pylas # to read in the point cloud
 
 # ------------------------------------------------------------
 def fn_return_xyc(point):
-    
+
     """
     Get a list of paramaters for a single LAS point
 
     Args:
         point: single las point from pylas
-        
+
     Returns:
         list of parameters of las point
     """
-    
+
     x = point[0]
     y = point[1]
-    c = point[5] # classification
+    c = point[6] # classification (seems to be 6 for LA)
     return [x, y, c]
 # ------------------------------------------------------------
 
@@ -65,17 +65,17 @@ def fn_get_hull_polygons(dict_params):
         int_lidar_class: classification which hulls will be generated
         flt_epsilon: DBSCAN epsilon - radial distance from point to be in neighboorhood in centimeters
         int_min_samples: DBSCAN - points within epsilon radius to anoint a core point
-        
+
     Returns:
 
         gdf_bridge_hulls: geopandas geodataframe of point cloud cluster hulls
     """
-    
+
     str_las_path = dict_params.get('str_las_path')
     int_lidar_class = dict_params.get('int_lidar_class')
     flt_epsilon = dict_params.get('flt_epsilon')
     int_min_samples = dict_params.get('int_min_samples')
-    
+
 
     str_lambert = "epsg:3857"
 
@@ -87,6 +87,11 @@ def fn_get_hull_polygons(dict_params):
 
     # crete list of lists of points with desired classification
     list_selected_pts = [point for point in points if point[2] == int_lidar_class]
+    # classes = set([point[2] for point in points])
+
+    # handle empty case
+    if len(list_selected_pts) == 0:
+        return gpd.GeoDataFrame()
 
     # DBSCAN clustering
     sk_clustering = DBSCAN(eps = flt_epsilon, min_samples = int_min_samples).fit(list_selected_pts)
@@ -114,11 +119,7 @@ def fn_get_hull_polygons(dict_params):
     # set the coordinate zone of the points geodataframe
     gdf = gdf.set_crs(str_lambert)
 
-    # create an Empty DataFrame object
-    gdf_bridge_hulls = gpd.GeoDataFrame(columns=['las_path', 'geometry'], geometry='geometry')
-
-    # set the coordinate zone of the points geodataframe
-    gdf_bridge_hulls = gdf_bridge_hulls.set_crs(str_lambert)
+    gdf_bridge_hulls = []
 
     for i in range(int_last_valid_cluster_index + 1):
 
@@ -136,10 +137,16 @@ def fn_get_hull_polygons(dict_params):
                             'geometry':  shp_poly_bridge_hull}
 
         # append this polygon to the geodataframe
-        gdf_bridge_hulls = gdf_bridge_hulls.append(dict_bridge_hull, ignore_index = True)
-    
+        gdf_bridge_hulls.append(dict_bridge_hull)
+
+    # create an Empty DataFrame object
+    gdf_bridge_hulls = gpd.GeoDataFrame(gdf_bridge_hulls, columns=['las_path', 'geometry'], geometry='geometry')
+
+    # set the coordinate zone of the points geodataframe
+    gdf_bridge_hulls = gdf_bridge_hulls.set_crs(str_lambert)
+
     sleep(0.01) # this allows the tqdm progress bar to update
-    
+
     return gdf_bridge_hulls
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -155,19 +162,19 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
     print("|                 University of Texas at Austin                   |")
     print("+-----------------------------------------------------------------+")
 
-    
+
     print("  ---(i) INPUT DIRECTORY: " + str_las_input_directory)
     print("  ---(o) OUTPUT DIRECTORY: " + str_output_dir)
     print("  ---[c]   Optional: CLASSIFICATION: " + str(int_class) )
-    print("  ---[e]   Optional: DBSCAN EPSILON: " + str(flt_epsilon) + " centimeters") 
-    print("  ---[m]   Optional: DBSCAN MIN SAMPLES: " + str(int_min_samples) ) 
+    print("  ---[e]   Optional: DBSCAN EPSILON: " + str(flt_epsilon) + " centimeters")
+    print("  ---[m]   Optional: DBSCAN MIN SAMPLES: " + str(int_min_samples) )
     print("===================================================================")
-    
+
     str_lambert = "epsg:3857"
-    
+
     # create the output directory if it does not exist
     os.makedirs(str_output_dir, exist_ok=True)
-    
+
     list_files = []
 
     #TODO - Do we really want a walk and not just files in this folder? - 2022.04.27
@@ -177,33 +184,33 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
                 # Note the case sensitive issue
                 str_file_path = os.path.join(root, file)
                 list_files.append(str_file_path)
-    
+
     # get list of just the las files with points
     list_files_with_points = []
-    
+
     for str_las_file_path in list_files:
         # read in the point cloud with pylas
         pcloud = pylas.read(str_las_file_path)
         points = [fn_return_xyc(i) for i in pcloud]
         if len(points) > 0:
             list_files_with_points.append(str_las_file_path)
-    
+
     if len(list_files_with_points) > 0:
-        
+
         list_gdf_hulls = []
         list_of_dict = []
-        
+
         for i in list_files_with_points:
             dict_params = {'str_las_path': i,
                            'int_lidar_class': int_class,
                            'flt_epsilon': flt_epsilon,
                            'int_min_samples': int_min_samples}
             list_of_dict.append(dict_params)
-            
-        
+
+
         l = len(list_files_with_points)
         p = mp.Pool(processes = (mp.cpu_count() - 1))
-            
+
         list_gdf_hulls = list(tqdm.tqdm(p.imap(fn_get_hull_polygons, list_of_dict),
                                             total = l,
                                             desc='Processing LAS',
@@ -211,28 +218,28 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
                                             ncols=65))
         p.close()
         p.join()
-        
+
         # combine all the returned geodataframes
         gdf_hulls = pd.concat(list_gdf_hulls, ignore_index=True)
 
         # set a projection
         gdf_hulls = gdf_hulls.set_crs(str_lambert)
-        
-        
+
+
         if len(gdf_hulls) > 1:
             # merging the overlapping polygons - polygons span multiple tiles
             # create a union of all the hulls
             gdf_hulls_merge = gdf_hulls.unary_union
-            
+
 
             if (isinstance(gdf_hulls_merge, sh.MultiPolygon)):
                 gdf_merge_polygons = gpd.GeoDataFrame([polygon for polygon in gdf_hulls_merge]).set_geometry(0)
                 gdf_merge_polygons.rename_geometry('geometry', inplace=True)
             else:
                 gdf_merge_polygons = gpd.GeoDataFrame(geometry=[gdf_hulls_merge])
-            
+
             gdf_merge_polygons = gdf_merge_polygons.set_crs(str_lambert)
-            
+
             # add a interim bridge id number to determine intersecting tiles
             gdf_merge_polygons.insert(0, 'temp_id', range(0, 0 + len(gdf_merge_polygons)))
         else:
@@ -243,57 +250,57 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
         # intersect the polygons
         gdf_intersection = gdf_merge_polygons.overlay(gdf_hulls, how='intersection')
 
-    
+
         list_clouds_per_poly = []
-        
+
         if len(gdf_hulls) > 1:
             for i in range(0, 0 + len(gdf_merge_polygons)):
                 # get all the rows that match the temp_id
                 gdf_current_poly = gdf_intersection.loc[gdf_intersection['temp_id'] == i]
-                
+
                 #TODO - need to check if no tiles returned - 2022.04.27
-                
+
                 # convert the coloumn to list
                 list_tiles = gdf_current_poly['las_path'].tolist()
-                
+
                 list_clouds_per_poly.append(list_tiles)
         else:
             # temp_id is one only
             gdf_current_poly = gdf_merge_polygons.loc[0]
-                
+
             # convert the coloumn to list
             try:
                 list_tiles = gdf_current_poly['las_path'].tolist()
                 list_clouds_per_poly.append(list_tiles)
             except:
                 list_tiles = [gdf_current_poly['las_path']]
-                
+
             list_clouds_per_poly.append(list_tiles)
-            
+
         # add the 'list_clouds_per_poly' as new coloumn to gdf_merge_polygons
         gdf_merge_polygons['las_paths'] = list_clouds_per_poly
-        
+
         # delete the 'temp_id' coloumn
         del gdf_merge_polygons['temp_id']
-        
+
         # stringify list
         # TODO - 2022.07.21 - what if the list_clouds_per_poly is too long to fit into a field?
         gdf_merge_polygons['las_paths'] = gdf_merge_polygons['las_paths'].astype(str)
-        
+
         str_file_shp_to_write = os.path.join(str_output_dir, 'class_' + str(int_class) +'_ar_3857.shp')
         gdf_merge_polygons.to_file(str_file_shp_to_write)
-        
+
         # the geopackage does not truncate the 'las_path' field name converted from list
         str_file_gpkg_to_write = os.path.join(str_output_dir, 'class_' + str(int_class) +'_ar_3857.gpkg')
         gdf_merge_polygons.to_file(str_file_gpkg_to_write, driver='GPKG')
         print("+-----------------------------------------------------------------+")
-        
+
         return(True)
     else:
         print("+--No Classified points found--exiting---+")
         return(False)
-        
-    
+
+
 # `````````````````````````````````````````````````````````````
 
 
@@ -301,9 +308,9 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
 if __name__ == '__main__':
 
     flt_start_run = time.time()
-    
+
     parser = argparse.ArgumentParser(description='========= POLYGONIZE POINT CLOUD GROUPS BY CLASSIFICATION =========')
-    
+
     parser.add_argument('-i',
                         dest = "str_las_input_directory",
                         help=r'REQUIRED: directory containing LAS Example: C:\test\cloud_harvest\cloud_output',
@@ -317,7 +324,7 @@ if __name__ == '__main__':
                         required=True,
                         metavar='DIR',
                         type=str)
-    
+
     parser.add_argument('-c',
                         dest = "int_class",
                         help='OPTIONAL: desired point cloud classification: Default=17 (bridge)',
@@ -325,7 +332,7 @@ if __name__ == '__main__':
                         default=17,
                         metavar='INTEGER',
                         type=int)
-    
+
     parser.add_argument('-e',
                         dest = "flt_epsilon",
                         help='OPTIONAL: DBSCAN epsilon - distance from point to be in neighboorhood in centimeters: Default=250',
@@ -333,18 +340,18 @@ if __name__ == '__main__':
                         default=250,
                         metavar='FLOAT',
                         type=float)
-    
+
     parser.add_argument('-m',
                         dest = "int_min_samples",
                         help='OPTIONAL: DBSCAN - points within epsilon radius to anoint a core point: Default=4',
                         required=False,
                         default=4,
                         metavar='INTEGER',
-                        type=int)   
+                        type=int)
 
 
     args = vars(parser.parse_args())
-    
+
     str_las_input_directory = args['str_las_input_directory']
     str_output_dir = args['str_output_dir']
     int_class = args['int_class']
@@ -356,11 +363,11 @@ if __name__ == '__main__':
                                int_class,
                                flt_epsilon,
                                int_min_samples)
-    
-    
+
+
     flt_end_run = time.time()
     flt_time_pass = (flt_end_run - flt_start_run) // 1
     time_pass = datetime.timedelta(seconds=flt_time_pass)
-    
+
     print('Compute Time: ' + str(time_pass))
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
