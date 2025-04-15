@@ -1,0 +1,20 @@
+{
+    "name": "PDAL Dev Container",
+    // "build": {
+    //     "dockerfile": "Dockerfile"
+    // },
+    "image": "pdal/pdal:latest",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-toolsai.jupyter",
+          "ms-azuretools.vscode-docker"
+        ]
+      }
+    },
+    "mounts": [
+      "source=${localWorkspaceFolder},target=/workspace,type=bind"
+    ],
+    "remoteUser": "root"
+  }
