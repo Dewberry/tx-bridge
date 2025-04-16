@@ -1,0 +1,20 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Run TX-BRIDGE",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/tx_bridge_local.py",
+            "console": "integratedTerminal",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": ["-i", "config_local_run.json", "-s", "0"]
+        }
+    ]
+}
