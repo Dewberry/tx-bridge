@@ -1,34 +1,29 @@
-# In the folder containing this Dockerfile, run the following command
-# docker build -t civileng127/tx-bridge:20230911 .
-#
-# to ensure that the git clone is not cached
-# docker build --no-cache -t civileng127/tx-bridge:20230911c .
+# Base image
+FROM pdal/pdal:latest
 
-# Use continuumio/miniconda3 as a parent image
-FROM continuumio/miniconda3
+# allow for dev only file mounting
+ARG DEV="false"
+ENV DEV=${DEV}
 
 # Set the working directory in the container
-WORKDIR /app
-
-# Update Conda
-RUN conda update -n base -c defaults conda
-
-# Create a directory named "tx-bridge"
-RUN mkdir tx-bridge
+WORKDIR /TX-BRIDGE
 
 # Clone the Git repository into the /tx-bridge directory (use hpc_run branch)
-RUN git clone -b hpc_run https://github.com/andycarter-pe/tx-bridge.git /tx-bridge
+RUN if [ "$DEV" = "false" ]; then git clone -b hpc_run https://github.com/andycarter-pe/tx-bridge.git /TX-BRIDGE; fi
+COPY requirements.txt requirements.txt
 
-# Copy the requirements.txt file into the container at /app
-COPY requirements.txt .
+# Initialize mamba and conda
+RUN mamba init
+
+# Make sure shell uses bash
+SHELL ["/bin/bash", "-c"]
 
 # Install packages from requirements.txt in the base environment from Conda Forge
-RUN conda config --add channels conda-forge && \
-    conda install --file requirements.txt && \
-    conda clean --all -f -y
-	
-# Install packages using pip
-RUN pip install pylas netCDF4
+RUN source ~/.bashrc && \
+    conda config --add channels conda-forge && \
+    mamba install --file requirements.txt -n pdal -y && \
+    mamba run -n pdal pip install pylas netCDF4 && \
+    mamba clean --all -f -y
 
-RUN apt update
-RUN apt install nano
+
+

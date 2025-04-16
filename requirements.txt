@@ -1,7 +1,9 @@
 # requirements.txt
-python-pdal
+# python-pdal
 geopandas
 osmnx
 rioxarray
 simplekml
 dask
+tqdm
+rtree

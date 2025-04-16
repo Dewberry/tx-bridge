@@ -1,0 +1,14 @@
+{
+    "str_aoi_shp_filepath": "data/in/AOI1.gpkg",
+    "str_aoi_name": "AOI1",
+    "str_output_folder": "data/out",
+    "b_is_feet": true,
+    "str_cog_dem_path": "/data/out/rtree_file",
+    "copc_point_cloud": {
+        "copc_name": "test",
+        "copc_date": 20250406,
+        "copc_short_name": "tst",
+        "copc_filepath": "data/out/test_bridge.copc.laz",
+        "copc_class": 13
+    }
+}
