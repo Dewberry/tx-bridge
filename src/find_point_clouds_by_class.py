@@ -11,6 +11,7 @@
 
 # ************************************************************
 import os
+import subprocess
 
 import geopandas as gpd
 import pandas as pd
@@ -265,10 +266,14 @@ def fn_get_las_tiles(gdf_current_tile):
             }
         ]}
         #execute the pdal pipeline
-        pipeline = pdal.Pipeline(json.dumps(pipeline_class_las))
-        n_points = pipeline.execute()
+        # pipeline = pdal.Pipeline(json.dumps(pipeline_class_las))
+        # n_points = pipeline.execute()
 
-        if n_points > 0:
+        cmd = ["/opt/conda/envs/pdal/bin/pdal", "pipeline", "--stdin", "--stream"]
+        p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        out, err = p.communicate(input=json.dumps(pipeline_class_las))
+
+        if os.path.exists(str_las):
             return(str_las)
         else:
             pass
@@ -335,7 +340,7 @@ def fn_point_clouds_by_class(str_input_path,
         gdf_single_row = gdf_tiles.loc[[index]]
         list_of_gdf_tiles.append(gdf_single_row)
 
-
+    # list_of_gdf_tiles = list_of_gdf_tiles[0:1]
     print("+-----------------------------------------------------------------+")
     l = len(gdf_tiles)
     p = mp.Pool(processes = (mp.cpu_count() - 1))
