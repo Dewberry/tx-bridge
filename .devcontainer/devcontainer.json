@@ -1,9 +1,9 @@
 {
     "name": "PDAL Dev Container",
-    // "build": {
-    //     "dockerfile": "Dockerfile"
-    // },
-    "image": "pdal/pdal:latest",
+    "build": {
+        "dockerfile": "../Dockerfile"
+    },
+    // "image": "pdal/pdal:latest",
     "customizations": {
       "vscode": {
         "extensions": [
