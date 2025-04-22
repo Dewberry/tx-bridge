@@ -287,8 +287,8 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
         # TODO - 2022.07.21 - what if the list_clouds_per_poly is too long to fit into a field?
         gdf_merge_polygons['las_paths'] = gdf_merge_polygons['las_paths'].astype(str)
 
-        str_file_shp_to_write = os.path.join(str_output_dir, 'class_' + str(int_class) +'_ar_3857.shp')
-        gdf_merge_polygons.to_file(str_file_shp_to_write)
+        # str_file_shp_to_write = os.path.join(str_output_dir, 'class_' + str(int_class) +'_ar_3857.shp')
+        # gdf_merge_polygons.to_file(str_file_shp_to_write)
 
         # the geopackage does not truncate the 'las_path' field name converted from list
         str_file_gpkg_to_write = os.path.join(str_output_dir, 'class_' + str(int_class) +'_ar_3857.gpkg')
