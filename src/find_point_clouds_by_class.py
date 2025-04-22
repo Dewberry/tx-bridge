@@ -255,9 +255,9 @@ def fn_get_las_tiles(gdf_current_tile):
                 "tag":"readdata"
             },
             {
-                "type":"filters.range",
-                "limits": str_classification,
-                "tag":"class_points"
+                "type":"filters.expression",
+                "expression":"Classification == {}".format(INT_CLASS),
+                "tag": "class_points",
             },
             {
                 "filename": str_las,
@@ -290,7 +290,8 @@ def fn_point_clouds_by_class(str_input_path,
                              int_class,
                              int_buffer,
                              int_tile,
-                             int_overlap):
+                             int_overlap,
+                             make_tiles):
 
     # supress all warnings
     warnings.filterwarnings("ignore", category=UserWarning )
@@ -312,12 +313,16 @@ def fn_point_clouds_by_class(str_input_path,
     print("  ---[m]   Optional: TILE OVERLAP: " + str(int_overlap) + " meters")
     print("===================================================================")
 
-
-    gdf_tiles = fn_create_tiles_gdf(str_input_path,
-                                    int_buffer,
-                                    int_tile,
-                                    int_tile,
-                                    int_overlap)
+    if make_tiles:
+        gdf_tiles = fn_create_tiles_gdf(str_input_path,
+                                        int_buffer,
+                                        int_tile,
+                                        int_tile,
+                                        int_overlap)
+    else:
+        gdf_tiles = gpd.read_file(str_input_path)
+        gdf_tiles = gdf_tiles.to_crs("epsg:3857")
+        gdf_tiles["tile_name"] = ""
 
     print('Determining Entwine paths: ' + str(len(gdf_tiles)) + ' tiles')
 

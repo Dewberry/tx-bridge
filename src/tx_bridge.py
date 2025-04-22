@@ -89,13 +89,11 @@ def fn_run_tx_bridge(str_input_shp_path_arg,
                      str_out_arg,
                      int_class,
                      b_is_feet,
-                     int_start_step):
-    
-    # mannualy setting the step to start computations
-    int_step = int_start_step
-    
+                     steps_to_run,
+                     make_tiles):
+
     flt_start_run_tx_bridge = time.time()
-    
+
     print(" ")
     print("+=================================================================+")
     print("|       CREATE BRIDGE DECK DATA FROM ENTWINE POINT CLOUDS         |")
@@ -103,133 +101,137 @@ def fn_run_tx_bridge(str_input_shp_path_arg,
     print("|             Center for Water and the Environment                |")
     print("|                 University of Texas at Austin                   |")
     print("+-----------------------------------------------------------------+")
-    
+
     print("  ---(i) INPUT SHAPEFILE: " + str(str_input_shp_path_arg))
-    print("  ---(o) OUTPUT DIRECTORY: " + str(str_out_arg))   
+    print("  ---(o) OUTPUT DIRECTORY: " + str(str_out_arg))
     print("  ---[c]   Optional: Point Classification: " + str(int_class))
     print("  ---[v]   Optional: Vertical in feet: " + str(b_is_feet))
-    print("  ---[s]   Optional: Starting step: " + str(int_start_step))
+    print("  ---[s]   Optional: Steps to run: " + str(steps_to_run))
+    print("  ---[t]   Optional: Tiled: " + str(make_tiles))
 
     print("===================================================================")
     print(" ")
-    
+
     # ---- Step 0: Save the input shapefile ----
-    if int_step <= 0:
+    if 0 in steps_to_run:
         str_input_shapefile_dir = os.path.join(str_out_arg, "00_input_shapefile")
         if not os.path.exists(str_input_shapefile_dir):
             os.mkdir(str_input_shapefile_dir)
-            
+
         # find a shapefile in the str_path_to_aoi_folder and get list
         list_shapefiles = fn_filelist(str_input_shapefile_dir, ('.SHP', '.shp'))
-        
+
         # if there is no shapefile in this directory, then save out the first polygon
         if len(list_shapefiles) <= 0:
             # load the polygon geodataframe
             gdf_polygons = gpd.read_file(str_input_shp_path_arg)
-            
+
             # select the first polygon
             gdf_single_poly = gdf_polygons.iloc[[0]]
-            
+
             # single polygon shapefile folder
             str_single_shape_file = os.path.join(str_input_shapefile_dir, 'input_polygon_ar.shp')
             gdf_single_poly.to_file(str_single_shape_file)
     # ------------------------------------------------------------------
-    
-    
+
+
     # ---- Step 1: find and download point clouds by classification ----
     int_buffer = 300 # distance to buffer the input polygon (meters)
     int_tile = 2000 # height and width of entwine tile (meters)
     int_overlap = 50 # requested point cloud tile overlay (meters)
-    
+
     # create a folder for las point clouds
-    str_las_from_entwine_dir = os.path.join(str_out_arg, "01_las_from_entwine") 
+    str_las_from_entwine_dir = os.path.join(str_out_arg, "01_las_from_entwine")
     if not os.path.exists(str_las_from_entwine_dir):
         os.mkdir(str_las_from_entwine_dir)
-    
+
     # run the first script (find_point_clouds_by_class)
-    if int_step <= 1:
+    if 1 in steps_to_run:
         fn_point_clouds_by_class(str_input_shp_path_arg,
                                  str_las_from_entwine_dir,
                                  int_class,
                                  int_buffer,
                                  int_tile,
-                                 int_overlap)
-    # ------------------------------------------------------------------ 
-    
+                                 int_overlap,
+                                 make_tiles)
+    # ------------------------------------------------------------------
+
     # ---- Step 2: create polygons of point cloud groupings ----
     flt_epsilon = 250 # DBSCAN - distance from point to be in neighboorhood in centimeters
     int_min_samples = 4 # DBSCAN - points within epsilon radius to anoint a core point
-    
+
     # create a folder hull polygons
-    str_hull_shp_dir = os.path.join(str_out_arg, "02_shapefile_of_hulls") 
+    str_hull_shp_dir = os.path.join(str_out_arg, "02_shapefile_of_hulls")
     if not os.path.exists(str_hull_shp_dir):
         os.mkdir(str_hull_shp_dir)
-        
-    if int_step <= 2:
+
+    if 2 in steps_to_run:
         b_clouds_found = fn_polygonize_point_groups(str_las_from_entwine_dir,
                                                     str_hull_shp_dir,
                                                     int_class,
                                                     flt_epsilon,
                                                     int_min_samples)
     # ------------------------------------------------------------------
-    
-    if int_step > 2:
+
+    if 2 in steps_to_run:
         b_clouds_found = True
-    
+
     if b_clouds_found:
         # classified point clouds found
         # do the other steps
-        
+
         # ---- Step 3: get OpenStreetMap Linework for roads, railraods, etc ----
         b_simplify_graph = True # simplify the network
         b_get_drive_service = True # get the road lines
         b_get_railroad = True # get the rialroad lines
-        
+
         # TODO - add buffer distance as input paramter - 20220617
-        
+
         # create a folder for OpenStreetMap linework
-        str_osm_lines_shp_dir = os.path.join(str_out_arg, "03_osm_trans_lines") 
+        str_osm_lines_shp_dir = os.path.join(str_out_arg, "03_osm_trans_lines")
         if not os.path.exists(str_osm_lines_shp_dir):
             os.mkdir(str_osm_lines_shp_dir)
-            
-        if int_step <= 3:
+
+        if 3 in steps_to_run:
             fn_get_osm_lines_from_shp(str_input_shp_path_arg,
                                       str_osm_lines_shp_dir,
                                       b_simplify_graph,
                                       b_get_drive_service,
                                       b_get_railroad)
         # ------------------------------------------------------------------
-        
+
         # ---- Step 4: determine the major axis for each polygon ----
         flt_buffer_hull = 30 # distance to extend major axis beyond hull (project aoi units)
-        
-        
+
+
         str_bridge_polygons_file = 'class_' + str(int_class) + '_ar_3857.gpkg'
         str_bridge_polygons_path = os.path.join(str_hull_shp_dir, str_bridge_polygons_file)
-        
+
         str_trans_line_path = os.path.join(str_osm_lines_shp_dir, 'osm_trans_ln.shp')
-        
+
         # create a folder for major axis lines
-        str_mjr_axis_shp_dir = os.path.join(str_out_arg, "04_major_axis_lines") 
+        str_mjr_axis_shp_dir = os.path.join(str_out_arg, "04_major_axis_lines")
         if not os.path.exists(str_mjr_axis_shp_dir):
             os.mkdir(str_mjr_axis_shp_dir)
-            
-        if int_step <= 4:
+
+        if 4 in steps_to_run:
             fn_determine_major_axis(str_bridge_polygons_path,
                                     str_trans_line_path,
                                     str_mjr_axis_shp_dir,
                                     flt_buffer_hull)
         # ------------------------------------------------------------------
-        
+
         # ---- Step 5: create DEM raster for each hull ----
         flt_dem_resolution = 0.3 # resolution of dem in meters
-        
+        str_bridge_polygons_file = 'class_' + str(int_class) + '_ar_3857.gpkg'
+        str_bridge_polygons_path = os.path.join(str_hull_shp_dir, str_bridge_polygons_file)
+
         # create a folder for major axis lines
-        str_deck_dem_dir = os.path.join(str_out_arg, "05_bridge_deck_dems") 
+        str_deck_dem_dir = os.path.join(str_out_arg, "05_bridge_deck_dems")
         if not os.path.exists(str_deck_dem_dir):
             os.mkdir(str_deck_dem_dir)
-            
-        if int_step <= 5:
+
+        if 5 in steps_to_run:
             fn_create_hull_dems(str_bridge_polygons_path,
                                 str_deck_dem_dir,
                                 flt_dem_resolution,
@@ -238,54 +240,53 @@ def fn_run_tx_bridge(str_input_shp_path_arg,
             # delete the extra dems
             fn_delete_files(str_deck_dem_dir)
             '''
-            
         # --------------------------------------------------
-        
+
         # ---- Step 6: flip major axis (left to right downstream) ----
         flt_mjr_axis = 0.3 # distance to buffer major axis
         str_major_axis_ln_path = os.path.join(str_mjr_axis_shp_dir, 'mjr_axis_ln.shp')
-        
+
         # create a folder for major axis lines
-        str_flip_axis_dir = os.path.join(str_out_arg, "06_flipped_major_axis") 
+        str_flip_axis_dir = os.path.join(str_out_arg, "06_flipped_major_axis")
         if not os.path.exists(str_flip_axis_dir):
             os.mkdir(str_flip_axis_dir)
-            
-        if int_step <= 6:
+
+        if 6 in steps_to_run:
             fn_flip_major_axis(str_major_axis_ln_path,
                                str_flip_axis_dir,
                                flt_mjr_axis)
         # --------------------------------------------------
-        
+
         # ---- Step 7: assign names to major axis lines ----
-        flt_perct_on_line = 0.35 # ratio distance to create a point on major axis    
+        flt_perct_on_line = 0.35 # ratio distance to create a point on major axis
         flt_offset  = 0.01 # distance to search around mjr axis' points for nearest osm line
-        
+
         str_mjr_axis_shp_path = os.path.join(str_flip_axis_dir, 'flip_mjr_axis_ln.shp')
-        
+
         # create a folder for major axis with names lines
-        str_mjr_axis_names_dir = os.path.join(str_out_arg, "07_major_axis_names") 
+        str_mjr_axis_names_dir = os.path.join(str_out_arg, "07_major_axis_names")
         if not os.path.exists(str_mjr_axis_names_dir):
             os.mkdir(str_mjr_axis_names_dir)
-            
-        if int_step <= 7:
+
+        if 7 in steps_to_run:
             fn_assign_osm_names_major_axis(str_input_shp_path_arg,
                                            str_mjr_axis_shp_path,
                                            str_mjr_axis_names_dir,
                                            flt_perct_on_line,
                                            flt_offset)
         # --------------------------------------------------
-        
+
         # ---- Step 8: extract deck profile (plot and tabular) ----
         flt_mjr_axis = 4 # distance to buffer major axis - lambert units - meters
         int_resolution = 1 # requested resolution in lambert units - meters
         flt_xs_sample_interval = 1 # interval to sample points along a line for cross section - crs units
-        
+
         # create a folder for deck profile plots and tables
-        str_deck_profiles_dir = os.path.join(str_out_arg, "08_cross_sections") 
+        str_deck_profiles_dir = os.path.join(str_out_arg, "08_cross_sections")
         if not os.path.exists(str_deck_profiles_dir):
             os.mkdir(str_deck_profiles_dir)
-        
-        if int_step <= 8:
+
+        if 8 in steps_to_run:
             fn_attribute_mjr_axis(str_out_arg, int_class)
         '''
         if int_step <= 8:
@@ -297,23 +298,23 @@ def fn_run_tx_bridge(str_input_shp_path_arg,
                                     int_resolution,
                                     flt_xs_sample_interval)
         '''
-     
+
         # --------------------------------------------------
-    
+
         # ---- Step 9: get bare earth terrain for each aoi polygon ----
         int_res = 3 # resolution of the bare earth dem
         int_buffer = 300 # buffer for each polygon (meters)
         int_tile = 1500 # size of bare earth tile to request
         str_field_name = ''
-        
+
         # create a folder for deck profile plots and tables
-        str_bare_earth_dem_dir = os.path.join(str_out_arg, "09_bare_earth_dem") 
+        str_bare_earth_dem_dir = os.path.join(str_out_arg, "09_bare_earth_dem")
         if not os.path.exists(str_bare_earth_dem_dir):
             os.mkdir(str_bare_earth_dem_dir)
-            
+
         # TODO - deletion error - 2022.06.17
-    
-        if int_step <= 9:
+
+        if 9 in steps_to_run:
             str_input_path_step_10 = fn_get_usgs_dem_from_shape(str_input_shp_path_arg,
                                                                 str_bare_earth_dem_dir,
                                                                 int_res,
@@ -321,47 +322,47 @@ def fn_run_tx_bridge(str_input_shp_path_arg,
                                                                 int_tile,
                                                                 b_is_feet,
                                                                 str_field_name)
-    
+
         # --------------------------------------------------
-        
+
         # ---- Step 10: merge the dems (bridge and bare earth) ----
         str_output_dem_name = ''
-        
-        str_healed_dem_dir = os.path.join(str_out_arg, "10_healed_dem") 
+
+        str_healed_dem_dir = os.path.join(str_out_arg, "10_healed_dem")
         if not os.path.exists(str_healed_dem_dir):
             os.mkdir(str_healed_dem_dir)
-            
+
         # run the first script (find_point_clouds_by_class)
-    
-        if int_step <= 10:
+
+        if 10 in steps_to_run:
             fn_composite_terrain(str_input_path_step_10,
                                  str_deck_dem_dir,
                                  str_healed_dem_dir,
                                  str_output_dem_name)
-    
-    
+
+
         # --------------------------------------------------
-        
+
     else:
         print('--- NO POINT CLOUDS FOUND ---')
-    
+
     flt_end_run_run_tx_bridge = time.time()
     flt_time_pass_tx_bridge = (flt_end_run_run_tx_bridge - flt_start_run_tx_bridge) // 1
     time_pass_tx_bridge = datetime.timedelta(seconds=flt_time_pass_tx_bridge)
-    
+
     print('Total Compute Time: ' + str(time_pass_tx_bridge))
 # --------------------------------------------------------
 
 
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='======= CREATE BRIDGE DECK DATA FROM ENTWINE POINT CLOUDS ========')
-    
+
     # inputs
     # -- input shapefile of the area of iterest (polygon)
     # -- output directory (Example: C:\test\bridge_output\)
-    
+
     parser.add_argument('-i',
                         dest = "str_input_shp_path_arg",
                         help=r'REQUIRED: path to the input shapefile (polygons) Example: C:\test\cloud_harvest\huc_12_aoi_2277.shp',
@@ -383,7 +384,7 @@ if __name__ == '__main__':
                         default=17,
                         metavar='INTEGER',
                         type=int)
-    
+
     parser.add_argument('-v',
                         dest = "b_is_feet",
                         help='OPTIONAL: create vertical data in feet: Default=True',
@@ -391,25 +392,33 @@ if __name__ == '__main__':
                         default=True,
                         metavar='T/F',
                         type=str2bool)
-    
+
     parser.add_argument('-s',
-                    dest = "int_start_step",
-                    help='OPTIONAL: starting computational step: Default=0',
+                    dest = "steps_to_run",
+                    help='OPTIONAL: which process steps to run: Default=0:10',
                     required=False,
-                    default=0,
+                    nargs="*",
+                    default=list(range(11)),
                     metavar='INTEGER',
                     type=int)
-    
+
+    parser.add_argument('-t',
+                    dest = "make_tiles",
+                    help='OPTIONAL: whether to tile the AOI or directly use it: Default=True',
+                    action='store_true')
+
     args = vars(parser.parse_args())
-    
+
     str_input_shp_path_arg = args['str_input_shp_path_arg']
     str_out_arg = args['str_out_arg']
     int_class = args['int_class']
     b_is_feet = args['b_is_feet']
-    int_start_step = args['int_start_step']
-    
+    steps_to_run = args['steps_to_run']
+    make_tiles = args['make_tiles']
+
     fn_run_tx_bridge(str_input_shp_path_arg,
                      str_out_arg,
                      int_class,
                      b_is_feet,
-                     int_start_step)
+                     steps_to_run,
+                     make_tiles)

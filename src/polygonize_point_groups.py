@@ -233,7 +233,7 @@ def fn_polygonize_point_groups(str_las_input_directory, str_output_dir, int_clas
 
 
             if (isinstance(gdf_hulls_merge, sh.MultiPolygon)):
-                gdf_merge_polygons = gpd.GeoDataFrame([polygon for polygon in gdf_hulls_merge]).set_geometry(0)
+                gdf_merge_polygons = gpd.GeoDataFrame([polygon for polygon in gdf_hulls_merge.geoms]).set_geometry(0)
                 gdf_merge_polygons.rename_geometry('geometry', inplace=True)
             else:
                 gdf_merge_polygons = gpd.GeoDataFrame(geometry=[gdf_hulls_merge])
