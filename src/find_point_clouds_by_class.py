@@ -10,28 +10,24 @@
 # Uses the 'pdal' conda environment
 
 # ************************************************************
+import argparse
+import datetime
+import json
+
+# from multiprocessing.pool import ThreadPool
+import multiprocessing as mp
 import os
 import subprocess
+import time
+import warnings
+from time import sleep
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Polygon
-import pdal
-import json
-
-import argparse
-
-import time
-import datetime
-import warnings
-
-#from multiprocessing.pool import ThreadPool
-
-import multiprocessing as mp
 import tqdm
-from time import sleep
-
 from dateutil.parser import parse
+from shapely import to_wkt
+from shapely.geometry import Polygon
 
 # ************************************************************
 
@@ -43,17 +39,14 @@ def is_valid_file(parser, arg):
     else:
         # File exists so return the directory
         return arg
-        return open(arg, 'r')  # return an open file handle
+        return open(arg, "r")  # return an open file handle
+
+
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-def fn_create_tiles_gdf (str_aoi_shp_path,
-                         int_buffer,
-                         int_tile_x,
-                         int_tile_y,
-                         int_overlap):
-
+def fn_create_tiles_gdf(str_aoi_shp_path, int_buffer, int_tile_x, int_tile_y, int_overlap):
 
     # define the "lambert" espg
     str_lambert = "epsg:3857"
@@ -64,14 +57,13 @@ def fn_create_tiles_gdf (str_aoi_shp_path,
     # convert the input shapefile to lambert
     gdf_aoi_lambert = gdf_aoi_prj.to_crs(str_lambert)
 
-    #buffer the polygons in the input shapefile
-    gdf_aoi_lambert['geometry'] = gdf_aoi_lambert.geometry.buffer(int_buffer)
-
+    # buffer the polygons in the input shapefile
+    gdf_aoi_lambert["geometry"] = gdf_aoi_lambert.geometry.buffer(int_buffer)
 
     for index_gdf_int, row_gdf_int in gdf_aoi_lambert.iterrows():
 
         # the geometry from the requested polygon as wellKnownText
-        boundary_geom_WKT = gdf_aoi_lambert['geometry'][index_gdf_int]  # to WellKnownText
+        boundary_geom_WKT = gdf_aoi_lambert["geometry"][index_gdf_int]  # to WellKnownText
 
         # create geodataframe of just the current row
         gdf_aoi_lambert_current = gpd.GeoDataFrame(gdf_aoi_lambert.iloc[[index_gdf_int]])
@@ -88,7 +80,7 @@ def fn_create_tiles_gdf (str_aoi_shp_path,
         # convert the bounding coordinates to integers
         list_int_b = []
         for i in b:
-            list_int_b.append(int(i//1))
+            list_int_b.append(int(i // 1))
 
         # determine the width and height of the requested polygon
         flt_delta_x = list_int_b[2] - list_int_b[0]
@@ -107,52 +99,58 @@ def fn_create_tiles_gdf (str_aoi_shp_path,
         for value_x in range(int_tiles_in_x):
             list_point_x = []
             int_current_start_x = (value_x * (int_tile_x - int_overlap)) + list_int_b[0]
-            list_point_x = [int_current_start_x,
-                            int_current_start_x + int_tile_x,
-                            int_current_start_x + int_tile_x,
-                            int_current_start_x,
-                            int_current_start_x]
+            list_point_x = [
+                int_current_start_x,
+                int_current_start_x + int_tile_x,
+                int_current_start_x + int_tile_x,
+                int_current_start_x,
+                int_current_start_x,
+            ]
 
             for value_y in range(int_tiles_in_y):
                 list_point_y = []
                 int_current_start_y = (value_y * (int_tile_y - int_overlap)) + list_int_b[1]
-                list_point_y = [int_current_start_y,
-                                int_current_start_y,
-                                int_current_start_y + int_tile_y,
-                                int_current_start_y + int_tile_y,
-                                int_current_start_y]
+                list_point_y = [
+                    int_current_start_y,
+                    int_current_start_y,
+                    int_current_start_y + int_tile_y,
+                    int_current_start_y + int_tile_y,
+                    int_current_start_y,
+                ]
 
                 polygon_geom = Polygon(zip(list_point_x, list_point_y))
                 list_geometry.append(polygon_geom)
 
-                str_time_name = str(value_x) + '_' + str(value_y)
+                str_time_name = str(value_x) + "_" + str(value_y)
                 list_tile_name.append(str_time_name)
 
     # create a pandas dataframe
-    df = pd.DataFrame({'tile_name': list_tile_name, 'geometry': list_geometry})
+    df = pd.DataFrame({"tile_name": list_tile_name, "geometry": list_geometry})
 
     # convert the pandas dataframe to a geopandas dataframe
-    gdf_tiles = gpd.GeoDataFrame(df, geometry='geometry')
+    gdf_tiles = gpd.GeoDataFrame(df, geometry="geometry")
 
     # set the tile footprint crs
     gdf_tiles = gdf_tiles.set_crs(str_lambert)
 
     # intersect the tiles and the requested polygon
-    gdf_intersected_tiles = gpd.overlay(gdf_tiles, gdf_aoi_lambert_current, how='intersection')
+    gdf_intersected_tiles = gpd.overlay(gdf_tiles, gdf_aoi_lambert_current, how="intersection")
 
     # get a unique list of the intersected tiles
-    arr_tiles_intersect = gdf_intersected_tiles['tile_name'].unique()
+    arr_tiles_intersect = gdf_intersected_tiles["tile_name"].unique()
 
     # convert the array to a list
     list_tiles_intersect = arr_tiles_intersect.tolist()
 
     # new geodataframe of the tiles intersected (but not clipped)
-    gdf_tiles_intersect_only = gdf_tiles[gdf_tiles['tile_name'].isin(list_tiles_intersect)]
+    gdf_tiles_intersect_only = gdf_tiles[gdf_tiles["tile_name"].isin(list_tiles_intersect)]
 
     # reset the remaining tile index
     gdf_tiles_intersect_only = gdf_tiles_intersect_only.reset_index(drop=True)
 
     return gdf_tiles_intersect_only
+
+
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 
@@ -162,9 +160,9 @@ def fn_determine_ept_source_per_tile(gdf_tiles):
     # TODO - MAC - 2022.10.11 - Need to force an overide
 
     # str_hobu_footprints = r'C:/test/eastern_tx_bridge_20230103/eastern_entwine_bridge_20230103_ar_4326.geojson'
-    #str_hobu_footprints = r'C:/test/hurricane_tx_bridge_20230103/hurricane_entwine_bridge_20230103_ar_4326.geojson'
-    #str_hobu_footprints = r'D:/Llano_bridge_lidar/City_of_Llano/city_of_llano_source_ar_4326.geojson'
-    str_hobu_footprints = r'https://raw.githubusercontent.com/hobu/usgs-lidar/master/boundaries/boundaries.topojson'
+    # str_hobu_footprints = r'C:/test/hurricane_tx_bridge_20230103/hurricane_entwine_bridge_20230103_ar_4326.geojson'
+    # str_hobu_footprints = r'D:/Llano_bridge_lidar/City_of_Llano/city_of_llano_source_ar_4326.geojson'
+    str_hobu_footprints = r"https://raw.githubusercontent.com/hobu/usgs-lidar/master/boundaries/boundaries.topojson"
 
     # Get EPT limits from github repository
     gdf_entwine_footprints = gpd.read_file(str_hobu_footprints)
@@ -182,21 +180,21 @@ def fn_determine_ept_source_per_tile(gdf_tiles):
 
     # get a point cloud for the 'selected' polygon
     for index, row in gdf_tiles.iterrows():
-        gdf_current_poly = gdf_tiles.iloc[index:index + 1]
+        gdf_current_poly = gdf_tiles.iloc[index : index + 1]
 
         # clip the footprints to the requested boundary
-        gdf_entwine_footprints_clip = gpd.overlay(gdf_entwine_footprints, gdf_current_poly, how='intersection')
+        gdf_entwine_footprints_clip = gpd.overlay(gdf_entwine_footprints, gdf_current_poly, how="intersection")
 
         if len(gdf_entwine_footprints_clip) == 1:
             int_index_max_year = 0
-            #ept_source = gdf_entwine_footprints_clip.loc[0, 'url']
+            # ept_source = gdf_entwine_footprints_clip.loc[0, 'url']
         elif len(gdf_entwine_footprints_clip) > 1:
             list_year_flight = []
             # determine the 'most current'
             for index, row in gdf_entwine_footprints_clip.iterrows():
                 # get the name of the dataset - hopefully contains a year in the name
 
-                str_flight_name = gdf_entwine_footprints_clip.at[index,'name']
+                str_flight_name = gdf_entwine_footprints_clip.at[index, "name"]
 
                 try:
                     # parse out the year as an integer
@@ -210,19 +208,21 @@ def fn_determine_ept_source_per_tile(gdf_tiles):
             int_index_max_year = list_year_flight.index(max(list_year_flight))
         else:
             # no ept sources were found
-            ept_source = 'none_found'
+            ept_source = "none_found"
             list_ept_tiles.append(ept_source)
 
         if len(gdf_entwine_footprints_clip) > 0:
             # log only if there is a point cloud source found
-            ept_source = gdf_entwine_footprints_clip.loc[int_index_max_year, 'url']
-            #print(ept_source)
+            ept_source = gdf_entwine_footprints_clip.loc[int_index_max_year, "url"]
+            # print(ept_source)
             list_ept_tiles.append(ept_source)
 
     # add the list to geodataframe
-    gdf_tiles['ept_source'] = list_ept_tiles
+    gdf_tiles["ept_source"] = list_ept_tiles
 
-    return(gdf_tiles)
+    return gdf_tiles
+
+
 # -------------------------------------------------------------------
 
 
@@ -230,42 +230,31 @@ def fn_determine_ept_source_per_tile(gdf_tiles):
 def fn_get_las_tiles(gdf_current_tile):
 
     # 'tile_name'
-    str_tile_name = gdf_current_tile.iloc[0]['tile_name']
-    ept_source = gdf_current_tile.iloc[0]['ept_source']
-    INT_CLASS = gdf_current_tile.iloc[0]['class']
-    STR_OUTPUT_PATH = gdf_current_tile.iloc[0]['out_dir']
+    str_tile_name = gdf_current_tile.iloc[0]["tile_name"]
+    ept_source = gdf_current_tile.iloc[0]["ept_source"]
+    INT_CLASS = gdf_current_tile.iloc[0]["class"]
+    STR_OUTPUT_PATH = gdf_current_tile.iloc[0]["out_dir"]
 
+    if ept_source != "none_found":
+        g = to_wkt(gdf_current_tile.iloc[0]["geometry"])
 
-    if ept_source != 'none_found':
-        b = gdf_current_tile.iloc[0]['geometry'].bounds #the bounding box of the requested lambert polygon
+        str_las = os.path.join(STR_OUTPUT_PATH, str_tile_name + "_class_" + str(INT_CLASS) + ".las")
 
-        str_classification = "Classification[" + str(INT_CLASS) + ":" + str(INT_CLASS) + "]"
-
-        str_las = os.path.join(STR_OUTPUT_PATH, str_tile_name + '_class_' + str(INT_CLASS) + '.las')
-
-        #if n_points > 0:
-            # get and save the point cloud with the requested classificaton
+        # if n_points > 0:
+        # get and save the point cloud with the requested classificaton
 
         pipeline_class_las = {
-        "pipeline": [
-            {
-                'bounds':str(([b[0], b[2]],[b[1], b[3]])),
-                "filename":ept_source,
-                "type":"readers.ept",
-                "tag":"readdata"
-            },
-            {
-                "type":"filters.expression",
-                "expression":"Classification == {}".format(INT_CLASS),
-                "tag": "class_points",
-            },
-            {
-                "filename": str_las,
-                "inputs": [ "class_points" ],
-                "type": "writers.las"
-            }
-        ]}
-        #execute the pdal pipeline
+            "pipeline": [
+                {"polygon": g, "filename": ept_source, "type": "readers.ept", "tag": "readdata"},
+                {
+                    "type": "filters.expression",
+                    "expression": "Classification == {}".format(INT_CLASS),
+                    "tag": "class_points",
+                },
+                {"filename": str_las, "inputs": ["class_points"], "type": "writers.las"},
+            ]
+        }
+        # execute the pdal pipeline
         # pipeline = pdal.Pipeline(json.dumps(pipeline_class_las))
         # n_points = pipeline.execute()
 
@@ -274,27 +263,21 @@ def fn_get_las_tiles(gdf_current_tile):
         out, err = p.communicate(input=json.dumps(pipeline_class_las))
 
         if os.path.exists(str_las):
-            return(str_las)
+            return str_las
         else:
             pass
             # need to delete this file
 
-    sleep(0.01) # this allows the tqdm progress bar to update
+    sleep(0.01)  # this allows the tqdm progress bar to update
+
 
 # ===================================================================
 
 
-
-def fn_point_clouds_by_class(str_input_path,
-                             str_output_dir,
-                             int_class,
-                             int_buffer,
-                             int_tile,
-                             int_overlap,
-                             make_tiles):
+def fn_point_clouds_by_class(str_input_path, str_output_dir, int_class, int_buffer, int_tile, int_overlap, make_tiles):
 
     # supress all warnings
-    warnings.filterwarnings("ignore", category=UserWarning )
+    warnings.filterwarnings("ignore", category=UserWarning)
 
     print(" ")
     print("+=================================================================+")
@@ -304,27 +287,22 @@ def fn_point_clouds_by_class(str_input_path,
     print("|                 University of Texas at Austin                   |")
     print("+-----------------------------------------------------------------+")
 
-
     print("  ---(i) INPUT PATH: " + str_input_path)
     print("  ---(o) OUTPUT PATH: " + str_output_dir)
-    print("  ---[c]   Optional: CLASSIFICATION: " + str(int_class) )
+    print("  ---[c]   Optional: CLASSIFICATION: " + str(int_class))
     print("  ---[b]   Optional: BUFFER: " + str(int_buffer) + " meters")
     print("  ---[t]   Optional: TILE SIZE: " + str(int_tile) + " meters")
     print("  ---[m]   Optional: TILE OVERLAP: " + str(int_overlap) + " meters")
     print("===================================================================")
 
     if make_tiles:
-        gdf_tiles = fn_create_tiles_gdf(str_input_path,
-                                        int_buffer,
-                                        int_tile,
-                                        int_tile,
-                                        int_overlap)
+        gdf_tiles = fn_create_tiles_gdf(str_input_path, int_buffer, int_tile, int_tile, int_overlap)
     else:
         gdf_tiles = gpd.read_file(str_input_path)
         gdf_tiles = gdf_tiles.to_crs("epsg:3857")
         gdf_tiles["tile_name"] = ""
 
-    print('Determining Entwine paths: ' + str(len(gdf_tiles)) + ' tiles')
+    print("Determining Entwine paths: " + str(len(gdf_tiles)) + " tiles")
 
     if not os.path.exists(str_output_dir):
         os.mkdir(str_output_dir)
@@ -333,10 +311,10 @@ def fn_point_clouds_by_class(str_input_path,
     gdf_tiles_ept = fn_determine_ept_source_per_tile(gdf_tiles)
 
     # append the dataframe with the classification
-    gdf_tiles_ept['class'] = int_class
+    gdf_tiles_ept["class"] = int_class
 
     # append the dataframe with the output directory
-    gdf_tiles_ept['out_dir'] = str_output_dir
+    gdf_tiles_ept["out_dir"] = str_output_dir
 
     # creating a list of geodataframes (just one row each) for multithreading the pdal requests
     list_of_gdf_tiles = []
@@ -348,89 +326,100 @@ def fn_point_clouds_by_class(str_input_path,
     # list_of_gdf_tiles = list_of_gdf_tiles[0:1]
     print("+-----------------------------------------------------------------+")
     l = len(gdf_tiles)
-    p = mp.Pool(processes = (mp.cpu_count() - 1))
+    p = mp.Pool(processes=(mp.cpu_count() - 1))
 
-    list_return_values = list(tqdm.tqdm(p.imap(fn_get_las_tiles, list_of_gdf_tiles),
-                                        total = l,
-                                        desc='Get LAS Points',
-                                        bar_format = "{desc}:({n_fmt}/{total_fmt})|{bar}| {percentage:.1f}%",
-                                        ncols=65))
+    list_return_values = list(
+        tqdm.tqdm(
+            p.imap(fn_get_las_tiles, list_of_gdf_tiles),
+            total=l,
+            desc="Get LAS Points",
+            bar_format="{desc}:({n_fmt}/{total_fmt})|{bar}| {percentage:.1f}%",
+            ncols=65,
+        )
+    )
     p.close()
     p.join()
 
 
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if __name__ == '__main__':
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+if __name__ == "__main__":
 
     flt_start_run = time.time()
 
-    parser = argparse.ArgumentParser(description='========== POINT CLOUDS BY CLASSIFICATION FROM SHAPEFILE ==========')
+    parser = argparse.ArgumentParser(description="========== POINT CLOUDS BY CLASSIFICATION FROM SHAPEFILE ==========")
 
-    parser.add_argument('-i',
-                        dest = "str_input_path",
-                        help=r'REQUIRED: path to the input shapefile (polygons) Example: C:\test\cloud_harvest\huc_12_aoi_2277.shp',
-                        required=True,
-                        metavar='FILE',
-                        type=lambda x: is_valid_file(parser, x))
+    parser.add_argument(
+        "-i",
+        dest="str_input_path",
+        help=r"REQUIRED: path to the input shapefile (polygons) Example: C:\test\cloud_harvest\huc_12_aoi_2277.shp",
+        required=True,
+        metavar="FILE",
+        type=lambda x: is_valid_file(parser, x),
+    )
 
-    parser.add_argument('-o',
-                        dest = "str_output_dir",
-                        help=r'REQUIRED: directory to write DEM files Example: C:\test\cloud_harvest\cloud_output',
-                        required=True,
-                        metavar='DIR',
-                        type=str)
+    parser.add_argument(
+        "-o",
+        dest="str_output_dir",
+        help=r"REQUIRED: directory to write DEM files Example: C:\test\cloud_harvest\cloud_output",
+        required=True,
+        metavar="DIR",
+        type=str,
+    )
 
-    parser.add_argument('-c',
-                        dest = "int_class",
-                        help='OPTIONAL: desired point cloud classification: Default=17 (bridge)',
-                        required=False,
-                        default=17,
-                        metavar='INTEGER',
-                        type=int)
+    parser.add_argument(
+        "-c",
+        dest="int_class",
+        help="OPTIONAL: desired point cloud classification: Default=17 (bridge)",
+        required=False,
+        default=17,
+        metavar="INTEGER",
+        type=int,
+    )
 
-    parser.add_argument('-b',
-                        dest = "int_buffer",
-                        help='OPTIONAL: buffer for each polygon (meters): Default=300',
-                        required=False,
-                        default=300,
-                        metavar='INTEGER',
-                        type=int)
+    parser.add_argument(
+        "-b",
+        dest="int_buffer",
+        help="OPTIONAL: buffer for each polygon (meters): Default=300",
+        required=False,
+        default=300,
+        metavar="INTEGER",
+        type=int,
+    )
 
-    parser.add_argument('-t',
-                        dest = "int_tile",
-                        help='OPTIONAL: requested tile dimensions (meters): Default=2000',
-                        required=False,
-                        default=2000,
-                        metavar='INTEGER',
-                        type=int)
+    parser.add_argument(
+        "-t",
+        dest="int_tile",
+        help="OPTIONAL: requested tile dimensions (meters): Default=2000",
+        required=False,
+        default=2000,
+        metavar="INTEGER",
+        type=int,
+    )
 
-    parser.add_argument('-m',
-                        dest = "int_overlap",
-                        help='OPTIONAL: requested tile overlap distance (meters): Default=50',
-                        required=False,
-                        default=50,
-                        metavar='INTEGER',
-                        type=int)
+    parser.add_argument(
+        "-m",
+        dest="int_overlap",
+        help="OPTIONAL: requested tile overlap distance (meters): Default=50",
+        required=False,
+        default=50,
+        metavar="INTEGER",
+        type=int,
+    )
 
     args = vars(parser.parse_args())
 
-    str_input_path = args['str_input_path']
-    str_output_dir = args['str_output_dir']
-    int_class = args['int_class']
-    int_buffer = args['int_buffer']
-    int_tile = args['int_tile']
-    int_overlap = args['int_overlap']
+    str_input_path = args["str_input_path"]
+    str_output_dir = args["str_output_dir"]
+    int_class = args["int_class"]
+    int_buffer = args["int_buffer"]
+    int_tile = args["int_tile"]
+    int_overlap = args["int_overlap"]
 
-    fn_point_clouds_by_class(str_input_path,
-                             str_output_dir,
-                             int_class,
-                             int_buffer,
-                             int_tile,
-                             int_overlap)
+    fn_point_clouds_by_class(str_input_path, str_output_dir, int_class, int_buffer, int_tile, int_overlap)
 
     flt_end_run = time.time()
     flt_time_pass = (flt_end_run - flt_start_run) // 1
     time_pass = datetime.timedelta(seconds=flt_time_pass)
 
-    print('Compute Time: ' + str(time_pass))
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    print("Compute Time: " + str(time_pass))
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
