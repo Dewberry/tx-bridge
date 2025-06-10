@@ -24,6 +24,7 @@ from time import sleep
 
 import geopandas as gpd
 import pandas as pd
+from pyproj import CRS
 import tqdm
 from dateutil.parser import parse
 from shapely import to_wkt
@@ -171,7 +172,11 @@ def fn_determine_ept_source_per_tile(gdf_tiles):
     str_wgs = "epsg:4326"
 
     # Set the entwine footprint CRS
-    gdf_entwine_footprints = gdf_entwine_footprints.set_crs(str_wgs)
+    if gdf_entwine_footprints.crs is not None:
+        if gdf_entwine_footprints.crs != CRS(str_lambert):
+            raise ValueError(f"Expected CRS to be None or {str_lambert}) but got: {gdf_entwine_footprints.crs}")
+    else:
+        gdf_entwine_footprints = gdf_entwine_footprints.set_crs(str_wgs)
 
     # Convert the footprints to lambert
     gdf_entwine_footprints = gdf_entwine_footprints.to_crs(str_lambert)
