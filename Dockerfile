@@ -13,5 +13,5 @@ SHELL ["/bin/bash", "-c"]
 RUN source ~/.bashrc && \
     conda config --add channels conda-forge && \
     mamba install --file requirements.txt -n pdal -y && \
-    mamba run -n pdal pip install pylas netCDF4 && \
+    mamba run -n pdal pip install pylas netCDF4 scikit-learn && \
     mamba clean --all -f -y
